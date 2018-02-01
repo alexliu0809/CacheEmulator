@@ -201,12 +201,6 @@ class Cache():
 		self.conf = conf
 
 	def getDouble(self,address):
-		return self.getBlock(address).getDouble(address.getOffset())
-
-	def setDouble(self, address, val):
-		self.setBlock(address).setDouble(address.getOffset(),val)
-
-	def getBlock(self,address):
 		global logging
 		# See if the block this double belongs to is in cache.
 		
@@ -217,15 +211,14 @@ class Cache():
 		if find_block_result != None:
 			logging.log("read_hits")
 			find_block_result.set_last_visited_time(time())
-			return find_block_result
+			return find_block_result.getDouble(address.getOffset())
 
 		# Otherwise load the block into cache and return the block
 		else:
 			logging.log("read_misses")
-			return self.load_block_from_ram(address)
-			
+			return self.load_block_from_ram(address).getDouble(address.getOffset())
 
-	def setBlock(self,address):
+	def setDouble(self, address, val):
 		global logging
 		#Search In Corresponding Set (Theoratically In Parallel) and See If the Block exists
 		find_block_result = self.find_block_in_cache(address)
@@ -234,14 +227,12 @@ class Cache():
 		if find_block_result != None:
 			logging.log("write_hits")
 			find_block_result.set_last_visited_time(time())
-			return find_block_result
+			find_block_result.setDouble(address.getOffset(),val)
 
 		# Otherwise load the block into cache and return the block
 		else:
 			logging.log("write_misses")
-			return self.load_block_from_ram(address)
-		
-
+			self.load_block_from_ram(address).setDouble(address.getOffset(),val)
 
 	def load_block_from_ram(self, address):
 		#print("load_block_from_ram")
