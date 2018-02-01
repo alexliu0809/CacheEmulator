@@ -12,17 +12,44 @@ from time import time
 from copy import deepcopy
 
 conf = None
-
+log = None
 #Q1: Each Double Takes 1 Byte or 8 Bytes?
 #Q2: Address denotes bytes or bits or double?
 
 class Logging():
 	def __init__(self):
-		pass
+		
+		self.instruction_cnt = 0
+		self.read_hits = 0
+		self.read_misses = 0
+		self.write_hits = 0
+		self.write_misses = 0
+		self.log = False
 
-	def log(self,type,value):
-		pass
+	def log(self,log_type):
+		if self.log == False:
+			return 
 
+		if log_type == "read_hits":
+			self.read_hits += 1
+
+		elif log_type == "instruction_cnt":
+			self.instruction_cnt += 1
+
+		elif log_type == "read_misses":
+			self.read_misses += 1
+
+		elif log_type == "write_hits":
+			self.write_hits += 1
+
+		elif log_type == "write_misses":
+			self.write_misses += 1
+
+		else:
+			raise Exception("Unknown log_type {}".format(log_type))
+
+	def on(self):
+		self.log = True
 
 class Configuration():
 
@@ -34,7 +61,7 @@ class Configuration():
 		self.cache_size = cache_size
 		self.blocks_in_cache = int(cache_size / block_size)
 		
-		self.blocks_in_RAM = int(cache_size * 2 / block_size) # Assuming RAM is way larger than cache
+		self.blocks_in_RAM = int(cache_size * 8 / block_size) # Assuming RAM is way larger than cache
 
 		self.associativity = associativity
 		self.num_of_sets = int(self.blocks_in_cache / associativity)
@@ -134,7 +161,7 @@ class CPU():
 	def __init__(self):
 		self.cache = Cache()
 
-	def loadDouble(self,address):
+	def getDouble(self,address):
 		#Load a double from cache.
 		if address % 8 != 0:
 			raise Exception("Loading Double Should Use Start Address")
@@ -164,7 +191,7 @@ class Cache():
 		self.ram = RAM()
 		self.conf = conf
 
-	def getDouble(address):
+	def getDouble(self,address):
 		return self.getBlock(address).getDouble(address.getOffset())
 
 	def setDouble(self, address, val):
@@ -320,20 +347,31 @@ class RAM():
 
 def dot():
 	myCPU = CPU()
-
 	### Initialize Three Arrays
-	n = 1
+	n = 20
 	a = [Address(i * 8) for i in range(0,n)]
 	b = [Address(i * 8) for i in range(n,2*n)]
 	c = [Address(i * 8) for i in range(2*n,3*n)]
 
 	for i in range(n):
-		myCPU.setDouble(address=a[i], value=1)
-		myCPU.setDouble(address=b[i], value=2)
-		myCPU.setDouble(address=c[i], value=3)
+		myCPU.setDouble(address=a[i], value=i)
+		myCPU.setDouble(address=b[i], value=2*i)
+		myCPU.setDouble(address=c[i], value=3*i)
 		
 	print(myCPU.cache)
 	print(myCPU.cache.ram)
+
+	for i in range(n):
+		register1 = myCPU.getDouble(a[i])
+		register2 = myCPU.getDouble(b[i])
+		register3 = register1 * register2
+		myCPU.setDouble(c[i], register3)
+
+	print(myCPU.cache)
+	print(myCPU.cache.ram)
+	log.on()
+
+
 
 def mxm():
 	pass
@@ -342,11 +380,12 @@ def mxm_block():
 	pass
 
 def main(args):
-	global conf
+	global conf,log
 
 	np.random.seed(0)
 
 	conf = Configuration(args.cache_size, args.block_size, args.associativity, args.replacement, args.algorithm)
+	log = Logging()
 
 	print("Running Specification:\n{}".format(conf))
 
@@ -380,7 +419,7 @@ if __name__ == "__main__":
 	main(args)
 	"""
 
-	main(parser.parse_args(["-c=64","-b=8","-n=1","-r=LRU","-a=dot"]))
+	main(parser.parse_args(["-c=256","-b=16","-n=1","-r=LRU","-a=dot"]))
 
 
 
