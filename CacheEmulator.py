@@ -12,9 +12,12 @@ from time import time
 from copy import deepcopy
 
 conf = None
-log = None
-#Q1: Each Double Takes 1 Byte or 8 Bytes?
-#Q2: Address denotes bytes or bits or double?
+logging = None
+
+# Q1: What's instruction cnt -- high level, 4 for dot
+# Q2: Should we count setDouble priviously -- nope. Should Use A Different Way 
+# TODO: Test Against Book
+# TODO: Test Against MXM And MXM_
 
 class Logging():
 	def __init__(self):
@@ -24,10 +27,10 @@ class Logging():
 		self.read_misses = 0
 		self.write_hits = 0
 		self.write_misses = 0
-		self.log = False
+		self.log_flag = False
 
 	def log(self,log_type):
-		if self.log == False:
+		if self.log_flag == False:
 			return 
 
 		if log_type == "read_hits":
@@ -49,7 +52,13 @@ class Logging():
 			raise Exception("Unknown log_type {}".format(log_type))
 
 	def on(self):
-		self.log = True
+		self.log_flag = True
+
+	def off(self):
+		self.log_flag = False
+
+	def __repr__(self):
+		return "\t".join(["{}:{}".format(attr,value)for attr, value in self.__dict__.items()]) + "\n"
 
 class Configuration():
 
@@ -61,7 +70,7 @@ class Configuration():
 		self.cache_size = cache_size
 		self.blocks_in_cache = int(cache_size / block_size)
 		
-		self.blocks_in_RAM = int(cache_size * 8 / block_size) # Assuming RAM is way larger than cache
+		self.blocks_in_RAM = int(cache_size * 1024 / block_size) # Assuming RAM is way larger than cache
 
 		self.associativity = associativity
 		self.num_of_sets = int(self.blocks_in_cache / associativity)
@@ -168,17 +177,17 @@ class CPU():
 
 		return self.cache.getDouble(address)
 
-	def setDouble(self,address, value):
+	def setDouble(self, address, value):
 		if address % 8 != 0:
 			raise Exception("Storing Double Should Use Start Address")
 
 		self.cache.setDouble(address, value)
 
-	def addDouble():
-		pass
+	def addDouble(self,val1, val2):
+		return val1 + val2
 
-	def multDouble():
-		pass
+	def multDouble(self, val1, val2):
+		return val1 * val2
 
 class Cache():
 	def __init__(self):
@@ -195,38 +204,54 @@ class Cache():
 		return self.getBlock(address).getDouble(address.getOffset())
 
 	def setDouble(self, address, val):
-		self.getBlock(address).setDouble(address.getOffset(),val)
+		self.setBlock(address).setDouble(address.getOffset(),val)
 
 	def getBlock(self,address):
+		global logging
 		# See if the block this double belongs to is in cache.
 		
 		#Search In Corresponding Set (Theoratically In Parallel) and See If the Block exists
 		find_block_result = self.find_block_in_cache(address)
-		print("Finding Block {}".format(find_block_result))
+		#print("Finding Block {}".format(find_block_result))
 		# If the current block in cache, return the double from the block.
 		if find_block_result != None:
+			logging.log("read_hits")
 			find_block_result.set_last_visited_time(time())
 			return find_block_result
 
 		# Otherwise load the block into cache and return the block
 		else:
+			logging.log("read_misses")
 			return self.load_block_from_ram(address)
 			
 
 	def setBlock(self,address):
-		pass
+		global logging
+		#Search In Corresponding Set (Theoratically In Parallel) and See If the Block exists
+		find_block_result = self.find_block_in_cache(address)
+		#print("Finding Block {}".format(find_block_result))
+		# If the current block in cache, return the double from the block.
+		if find_block_result != None:
+			logging.log("write_hits")
+			find_block_result.set_last_visited_time(time())
+			return find_block_result
+
+		# Otherwise load the block into cache and return the block
+		else:
+			logging.log("write_misses")
+			return self.load_block_from_ram(address)
 		
 
 
 	def load_block_from_ram(self, address):
-		print("load_block_from_ram")
+		#print("load_block_from_ram")
 
 		current_time = time()
 
 		#block = deepcopy(self.ram.getBlock(address))
 		#If you don't use deepcopy here, then it returns the references, and it's automatically write-through with write-back
 		block = self.ram.getBlock(address)
-		print("Block Retrieved {}".format(block))
+		#print("Block Retrieved {}".format(block))
 
 		block.set_last_loaded_time(current_time)
 		block.set_last_visited_time(current_time)
@@ -244,7 +269,7 @@ class Cache():
 		#If there's no space in the corresponding set
 		#Perform replace algo.
 		if self.conf.replacement == "LRU":
-			print("LRU")
+			#print("LRU")
 
 			lru_index = None
 
@@ -272,7 +297,7 @@ class Cache():
 		elif self.conf.replacement == "FIFO":
 			fifo_index = None
 
-			for block_idx in self.blocks_per_set:
+			for block_idx in range(self.blocks_per_set):
 				# If there's no space in the corresponding set. Then valid bit are all True
 
 				#Find lru index
@@ -338,6 +363,7 @@ class RAM():
 		return self.data[address // self.conf.block_size]
 
 	def setBlock(self):
+		#write back ignored because ram and cache referring to same instance. -- auto write back
 		pass
 
 	def __repr__(self):
@@ -348,28 +374,43 @@ class RAM():
 def dot():
 	myCPU = CPU()
 	### Initialize Three Arrays
-	n = 20
+	n = 1000
 	a = [Address(i * 8) for i in range(0,n)]
 	b = [Address(i * 8) for i in range(n,2*n)]
 	c = [Address(i * 8) for i in range(2*n,3*n)]
 
+	
 	for i in range(n):
-		myCPU.setDouble(address=a[i], value=i)
-		myCPU.setDouble(address=b[i], value=2*i)
-		myCPU.setDouble(address=c[i], value=3*i)
-		
-	print(myCPU.cache)
-	print(myCPU.cache.ram)
+		myCPU.cache.ram.data[a[i]//conf.block_size].data[(a[i]//conf.size_of_double)%conf.size_of_double] = 1 * i
+		myCPU.cache.ram.data[b[i]//conf.block_size].data[(b[i]//conf.size_of_double)%conf.size_of_double] = 2 * i
+		myCPU.cache.ram.data[c[i]//conf.block_size].data[(c[i]//conf.size_of_double)%conf.size_of_double] = 3 * i
+	#print(myCPU.cache.ram.data[:376])
+	
+	#print(myCPU.cache)
+	#print(myCPU.cache.ram)
 
+	logging.on()
+	#for i in range(1):
 	for i in range(n):
 		register1 = myCPU.getDouble(a[i])
 		register2 = myCPU.getDouble(b[i])
-		register3 = register1 * register2
+		register3 = myCPU.multDouble(register1,register2)
 		myCPU.setDouble(c[i], register3)
+	logging.off()
+	#print(myCPU.cache)
+	#print(myCPU.cache.ram)
+	
 
-	print(myCPU.cache)
-	print(myCPU.cache.ram)
-	log.on()
+	"""
+	print()
+	for i in range(n):
+		print(myCPU.getDouble(address=a[i]))
+	for i in range(n):
+		print(myCPU.getDouble(address=b[i]))
+	for i in range(n):
+		print(myCPU.getDouble(address=c[i]))
+	"""
+	print(logging)
 
 
 
@@ -380,12 +421,12 @@ def mxm_block():
 	pass
 
 def main(args):
-	global conf,log
+	global conf,logging
 
 	np.random.seed(0)
 
 	conf = Configuration(args.cache_size, args.block_size, args.associativity, args.replacement, args.algorithm)
-	log = Logging()
+	logging = Logging()
 
 	print("Running Specification:\n{}".format(conf))
 
@@ -419,7 +460,29 @@ if __name__ == "__main__":
 	main(args)
 	"""
 
-	main(parser.parse_args(["-c=256","-b=16","-n=1","-r=LRU","-a=dot"]))
+	#n = 1000
+	#a = [Address(i) for i in range(0,n)]
+	#b = [Address(i) for i in range(n,2*n)]
+	#c = [Address(i) for i in range(2*n,3*n)]
+
+	
+	main(parser.parse_args(["-c=1024","-b=64","-n=1","-r=random","-a=dot"]))
+	main(parser.parse_args(["-c=1024","-b=64","-n=1","-r=LRU","-a=dot"]))
+	main(parser.parse_args(["-c=1024","-b=64","-n=1","-r=FIFO","-a=dot"]))
+
+	main(parser.parse_args(["-c=128","-b=64","-n=1","-r=random","-a=dot"]))
+	main(parser.parse_args(["-c=128","-b=64","-n=1","-r=LRU","-a=dot"]))
+	main(parser.parse_args(["-c=128","-b=64","-n=1","-r=FIFO","-a=dot"]))
+	
+	
+	main(parser.parse_args(["-c=1024","-b=64","-n=2","-r=random","-a=dot"]))
+	main(parser.parse_args(["-c=1024","-b=64","-n=2","-r=LRU","-a=dot"]))
+	main(parser.parse_args(["-c=1024","-b=64","-n=2","-r=FIFO","-a=dot"]))
+
+	#It's all misses -> why? Because the needed will always be evicted.
+	main(parser.parse_args(["-c=128","-b=64","-n=2","-r=random","-a=dot"]))
+	main(parser.parse_args(["-c=128","-b=64","-n=2","-r=LRU","-a=dot"]))
+	main(parser.parse_args(["-c=128","-b=64","-n=2","-r=FIFO","-a=dot"]))
 
 
 
