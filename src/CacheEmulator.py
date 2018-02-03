@@ -11,13 +11,8 @@ import math
 from time import time
 from copy import deepcopy
 
-conf = None
-logging = None
-
-# Q1: What's instruction cnt -- high level, 4 for dot
-# Q2: Should we count setDouble priviously -- nope. Should Use A Different Way 
-# TODO: Test Against Book
-# TODO: Test Against MXM And MXM_
+conf = None #Save Running Configuration
+logging = None #Save Stats
 
 class Logging():
 	def __init__(self):
@@ -52,25 +47,30 @@ class Logging():
 			raise Exception("Unknown log_type {}".format(log_type))
 
 	def on(self):
+		#Turn on logging
 		self.log_flag = True
 
 	def off(self):
+		#Turn off logging
 		self.log_flag = False
 
 	def __repr__(self):
+		#Print, for debug
 		return "\t".join(["{}:{}".format(attr,value)for attr, value in self.__dict__.items()]) + "\n"
 
 class Configuration():
 
 	def __init__(self, cache_size, block_size, associativity, replacement, algorithm):
-		self.size_of_double = 8
+		#Global Variable Recording configurations
 
-		self.block_size = block_size
+		self.size_of_double = 8 #8 bytes each double
+
+		self.block_size = block_size # Bytes of a data block
 		
-		self.cache_size = cache_size
+		self.cache_size = cache_size #cache size
 		self.ram_size = 1024 * 1024 * 64 
 
-		self.blocks_in_cache = int(cache_size / block_size)
+		self.blocks_in_cache = int(cache_size / block_size) # # of blocks in cache
 		
 		# Here we assume RAM size 64MB
 		self.blocks_in_RAM = int(self.ram_size / block_size) # Assuming RAM is way larger than cache.
@@ -78,7 +78,7 @@ class Configuration():
 		self.associativity = associativity
 		self.num_of_sets = int(self.blocks_in_cache / associativity)
 
-		self.replacement = replacement
+		self.replacement = replacement 
 		self.algorithm = algorithm
 
 	def __repr__(self):
@@ -146,6 +146,8 @@ class DataBlock():
 		return repr(self.data) + "\n"
 
 	def getDouble(self,key):
+		#return the double at address
+
 		if key % 8 != 0:
 			raise Exception("Setting Double Should Use Start Address")
 
@@ -155,6 +157,7 @@ class DataBlock():
 		return self.data[int(key/8)]
 
 	def setDouble(self,key,val):
+		#set the double at address
 		if key % 8 != 0:
 			raise Exception("Setting Double Should Use Start Address")
 
@@ -226,6 +229,7 @@ class Cache():
 			return self.load_block_from_ram(address).getDouble(address.getOffset())
 
 	def setDouble(self, address, val):
+		#The same as getDouble except that it sets value here.
 		global logging
 		#Search In Corresponding Set (Theoratically In Parallel) and See If the Block exists
 		find_block_result = self.find_block_in_cache(address)
@@ -242,6 +246,8 @@ class Cache():
 			self.load_block_from_ram(address).setDouble(address.getOffset(),val)
 
 	def load_block_from_ram(self, address):
+		#Retrieve datablock from RAM if not in cache and place in cache.
+
 		#print("load_block_from_ram")
 
 		current_time = time()
@@ -327,6 +333,7 @@ class Cache():
 	"""
 
 	def find_block_in_cache(self,address):
+		#See if the block is in cache
 
 		set_index_of_address = address.getIndex()
 		tag_of_address = address.getTag()
@@ -340,6 +347,7 @@ class Cache():
 		return None
 
 	def __repr__(self):
+		#For debug
 		string = "Cache Status:\n" 
 		for j in range(self.blocks_per_set):
 			for i in range(self.num_of_sets):
@@ -370,6 +378,8 @@ class RAM():
 
 
 def dot():
+	#Dot operation
+	
 	myCPU = CPU()
 
 	### Initialize Three Arrays
@@ -422,6 +432,7 @@ def dot():
 
 
 def mxm():
+	#see the book for algorithm
 	myCPU = CPU()
 
 	x = y = z = 100
@@ -468,6 +479,8 @@ def mxm():
 			
 
 def mxm_block():
+	#see the book for algorithm
+
 	myCPU = CPU()
 
 	x = y = z = 100
@@ -519,7 +532,7 @@ def mxm_block():
 def main(args):
 	global conf,logging
 
-	np.random.seed(0)
+	np.random.seed(0) #For repetibility 
 
 	conf = Configuration(args.cache_size, args.block_size, args.associativity, args.replacement, args.algorithm)
 	logging = Logging()
