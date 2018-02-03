@@ -68,9 +68,12 @@ class Configuration():
 		self.block_size = block_size
 		
 		self.cache_size = cache_size
+		self.ram_size = 1024 * 1024 * 64 
+
 		self.blocks_in_cache = int(cache_size / block_size)
 		
-		self.blocks_in_RAM = int(cache_size * 1024 / block_size) # Assuming RAM is way larger than cache
+		# Here we assume RAM size 64MB
+		self.blocks_in_RAM = int(self.ram_size / block_size) # Assuming RAM is way larger than cache.
 
 		self.associativity = associativity
 		self.num_of_sets = int(self.blocks_in_cache / associativity)
@@ -175,18 +178,22 @@ class CPU():
 		if address % 8 != 0:
 			raise Exception("Loading Double Should Use Start Address")
 
+		logging.log("instruction_cnt")
 		return self.cache.getDouble(address)
 
 	def setDouble(self, address, value):
 		if address % 8 != 0:
 			raise Exception("Storing Double Should Use Start Address")
 
+		logging.log("instruction_cnt")
 		self.cache.setDouble(address, value)
 
 	def addDouble(self,val1, val2):
+		logging.log("instruction_cnt")
 		return val1 + val2
 
 	def multDouble(self, val1, val2):
+		logging.log("instruction_cnt")
 		return val1 * val2
 
 class Cache():
@@ -364,52 +371,150 @@ class RAM():
 
 def dot():
 	myCPU = CPU()
+
 	### Initialize Three Arrays
-	n = 1000
+	n = 20000
 	a = [Address(i * 8) for i in range(0,n)]
 	b = [Address(i * 8) for i in range(n,2*n)]
-	c = [Address(i * 8) for i in range(2*n,3*n)]
+	c = Address(2 * n * 8)
 
-	
+	### Set Array Val Without Interfering Cache
+	doubles_per_block = conf.block_size // conf.size_of_double
 	for i in range(n):
-		myCPU.cache.ram.data[a[i]//conf.block_size].data[(a[i]//conf.size_of_double)%conf.size_of_double] = 1 * i
-		myCPU.cache.ram.data[b[i]//conf.block_size].data[(b[i]//conf.size_of_double)%conf.size_of_double] = 2 * i
-		myCPU.cache.ram.data[c[i]//conf.block_size].data[(c[i]//conf.size_of_double)%conf.size_of_double] = 3 * i
-	#print(myCPU.cache.ram.data[:376])
+		#print(a[i].address)
+		myCPU.cache.ram.data[a[i]//conf.block_size].data[(a[i]//conf.size_of_double)%doubles_per_block] = 1 * i
+		myCPU.cache.ram.data[b[i]//conf.block_size].data[(b[i]//conf.size_of_double)%doubles_per_block] = 2 * i
+		#myCPU.cache.ram.data[c[i]//conf.block_size].data[(c[i]//conf.size_of_double)%doubles_per_block] = 3 * i
 	
+	#print(myCPU.cache.ram.data[:376]
 	#print(myCPU.cache)
 	#print(myCPU.cache.ram)
 
+
+	#Start Simulation
 	logging.on()
-	#for i in range(1):
+	register0 = 0
 	for i in range(n):
 		register1 = myCPU.getDouble(a[i])
 		register2 = myCPU.getDouble(b[i])
 		register3 = myCPU.multDouble(register1,register2)
-		myCPU.setDouble(c[i], register3)
+		register0 = myCPU.addDouble(register0,register3)
+	myCPU.setDouble(c, register0)
 	logging.off()
-	#print(myCPU.cache)
-	#print(myCPU.cache.ram)
-	
+	#End Simulation
 
-	"""
-	print()
+	#Debug
+	#register1 = myCPU.getDouble(Address(0 * 8))
+	#register1 = myCPU.getDouble(Address(8 * 8))
+	#register1 = myCPU.getDouble(Address(0 * 8))
+	#register1 = myCPU.getDouble(Address(6 * 8))
+	#register1 = myCPU.getDouble(Address(8 * 8))
+
+	
+	#Double Checking Dot Result
+	val1 = myCPU.cache.ram.data[c//conf.block_size].data[(c//conf.size_of_double)%doubles_per_block]
+	cnt = 0
 	for i in range(n):
-		print(myCPU.getDouble(address=a[i]))
-	for i in range(n):
-		print(myCPU.getDouble(address=b[i]))
-	for i in range(n):
-		print(myCPU.getDouble(address=c[i]))
-	"""
-	print(logging)
+		cnt += myCPU.cache.ram.data[a[i]//conf.block_size].data[(a[i]//conf.size_of_double)%doubles_per_block] * myCPU.cache.ram.data[b[i]//conf.block_size].data[(b[i]//conf.size_of_double)%doubles_per_block]
+	if cnt != val1:
+		raise Exception("Dot Error")
 
 
 
 def mxm():
-	pass
+	myCPU = CPU()
+
+	x = y = z = 100
+
+	### Initialize Three Arrays With Address
+	a = [Address(i * 8) for i in range(x*y)] # x * y
+	b = [Address(i * 8) for i in range(x*y,x*y+y*z)] #y * z
+	c = [Address(i * 8) for i in range(x*y+y*z,x*y+y*z+x*z)] #x * z
+
+	### Set Array Val Without Interfering Cache
+	doubles_per_block = conf.block_size // conf.size_of_double
+	for i in range(x*y):
+		myCPU.cache.ram.data[a[i]//conf.block_size].data[(a[i]//conf.size_of_double)%doubles_per_block] = i
+	for i in range(y*z):
+		myCPU.cache.ram.data[b[i]//conf.block_size].data[(b[i]//conf.size_of_double)%doubles_per_block] = i
+	for i in range(x*z):
+		myCPU.cache.ram.data[c[i]//conf.block_size].data[(c[i]//conf.size_of_double)%doubles_per_block] = i
+	#print(myCPU.cache.ram.data[:376]
+
+	#Start Simulation
+	logging.on()
+	for i in range(x):
+		for j in range(z):
+			Cij = myCPU.getDouble(c[i * z + j])
+			for k in range(y):
+				Aik = myCPU.getDouble(a[i * y + k])
+				Bkj = myCPU.getDouble(b[k * z + j])
+				tmp = myCPU.multDouble(Aik,Bkj)
+				Cij = myCPU.addDouble(Cij,tmp)
+			myCPU.setDouble(c[i * z + j],Cij)
+	logging.off()
+	#End Simulation
+
+	#Double Checking Dot Result
+	for i in range(x):
+		for j in range(z):
+			Cij = i * z + j
+			for k in range(y):
+				Aik = myCPU.cache.ram.data[a[i * y + k]//conf.block_size].data[(a[i * y + k]//conf.size_of_double)%doubles_per_block]
+				Bkj = myCPU.cache.ram.data[b[k * z + j]//conf.block_size].data[(b[k * z + j]//conf.size_of_double)%doubles_per_block]
+				Cij += Aik * Bkj
+			if Cij != myCPU.cache.ram.data[c[i * z + j]//conf.block_size].data[(c[i * z + j]//conf.size_of_double)%doubles_per_block]:
+				raise Exception("Error, Result Doesn't Match")
+			
 
 def mxm_block():
-	pass
+	myCPU = CPU()
+
+	x = y = z = 100
+
+	mxm_block_size = int(x / 10)
+	doubles_per_block = conf.block_size // conf.size_of_double
+	### Initialize Three Arrays With Address
+	a = [Address(i * 8) for i in range(x*y)] # x * y
+	b = [Address(i * 8) for i in range(x*y,x*y+y*z)] #y * z
+	c = [Address(i * 8) for i in range(x*y+y*z,x*y+y*z+x*z)] #x * z
+
+	### Set Array Val Without Interfering Cache
+	for i in range(x*y):
+		myCPU.cache.ram.data[a[i]//conf.block_size].data[(a[i]//conf.size_of_double)%doubles_per_block] = i
+	for i in range(y*z):
+		myCPU.cache.ram.data[b[i]//conf.block_size].data[(b[i]//conf.size_of_double)%doubles_per_block] = i
+	for i in range(x*z):
+		myCPU.cache.ram.data[c[i]//conf.block_size].data[(c[i]//conf.size_of_double)%doubles_per_block] = i
+
+	#Start Simulation
+	logging.on()
+	for sj in range(0,z,mxm_block_size):
+		for si in range(0,x,mxm_block_size):
+			for sk in range(0,y,mxm_block_size):
+				for i in range(si,si+mxm_block_size):
+					for j in range(sj,sj+mxm_block_size):
+						Cij = myCPU.getDouble(c[i * z + j])
+						for k in range(sk,sk+mxm_block_size):
+							Aik = myCPU.getDouble(a[i * y + k])
+							Bkj = myCPU.getDouble(b[k * z + j])
+							tmp = myCPU.multDouble(Aik,Bkj)
+							Cij = myCPU.addDouble(Cij,tmp)
+						myCPU.setDouble(c[i * z + j],Cij)
+	logging.off()
+
+	#Double Checking Dot Result
+	for i in range(x):
+		for j in range(z):
+			Cij = i * z + j
+			for k in range(y):
+				Aik = myCPU.cache.ram.data[a[i * y + k]//conf.block_size].data[(a[i * y + k]//conf.size_of_double)%doubles_per_block]
+				Bkj = myCPU.cache.ram.data[b[k * z + j]//conf.block_size].data[(b[k * z + j]//conf.size_of_double)%doubles_per_block]
+				Cij += Aik * Bkj
+			if Cij != myCPU.cache.ram.data[c[i * z + j]//conf.block_size].data[(c[i * z + j]//conf.size_of_double)%doubles_per_block]:
+				raise Exception("Error, Result Doesn't Match")
+			
+
 
 def main(args):
 	global conf,logging
@@ -419,7 +524,7 @@ def main(args):
 	conf = Configuration(args.cache_size, args.block_size, args.associativity, args.replacement, args.algorithm)
 	logging = Logging()
 
-	print("Running Specification:\n{}".format(conf))
+	print("Running Configuration:\n{}".format(conf))
 
 	if conf.algorithm == "mxm":
 
@@ -431,10 +536,17 @@ def main(args):
 
 	elif conf.algorithm == "mxm_block":
 
-		max_block()
+		mxm_block()
 
 	else:
 		raise Exception("Unknown Conf.algorithm: {}".format(conf.algorithm))
+
+	# Print Result		
+	print(logging)
+	print()
+	print()
+
+	return logging
 
 if __name__ == "__main__":
 	
@@ -445,36 +557,11 @@ if __name__ == "__main__":
 	parser.add_argument("-n","--associativity",help = "The n-way associativity of the cache", default = 2, type = int)
 	parser.add_argument("-r","--replacement",help = "The replacement policy", default = "LRU", choices=['LRU', 'FIFO', 'random'])
 	parser.add_argument("-a","--algorithm",help = "The algorithm to simulate", default = "mxm", choices=['dot', 'mxm', 'mxm_block'])
-	"""
+	
 	args = parser.parse_args()
 
 	main(args)
-	"""
-
-	#n = 1000
-	#a = [Address(i) for i in range(0,n)]
-	#b = [Address(i) for i in range(n,2*n)]
-	#c = [Address(i) for i in range(2*n,3*n)]
-
 	
-	main(parser.parse_args(["-c=1024","-b=64","-n=1","-r=random","-a=dot"]))
-	main(parser.parse_args(["-c=1024","-b=64","-n=1","-r=LRU","-a=dot"]))
-	main(parser.parse_args(["-c=1024","-b=64","-n=1","-r=FIFO","-a=dot"]))
-
-	main(parser.parse_args(["-c=128","-b=64","-n=1","-r=random","-a=dot"]))
-	main(parser.parse_args(["-c=128","-b=64","-n=1","-r=LRU","-a=dot"]))
-	main(parser.parse_args(["-c=128","-b=64","-n=1","-r=FIFO","-a=dot"]))
-	
-	
-	main(parser.parse_args(["-c=1024","-b=64","-n=2","-r=random","-a=dot"]))
-	main(parser.parse_args(["-c=1024","-b=64","-n=2","-r=LRU","-a=dot"]))
-	main(parser.parse_args(["-c=1024","-b=64","-n=2","-r=FIFO","-a=dot"]))
-
-	#It's all misses -> why? Because the needed will always be evicted.
-	main(parser.parse_args(["-c=128","-b=64","-n=2","-r=random","-a=dot"]))
-	main(parser.parse_args(["-c=128","-b=64","-n=2","-r=LRU","-a=dot"]))
-	main(parser.parse_args(["-c=128","-b=64","-n=2","-r=FIFO","-a=dot"]))
-
 
 
 
